@@ -1,0 +1,39 @@
+# Patient Record System demo: search by Health ID / National ID / IMIS number, no sign-in.
+# Deploy on an unguessable hostname behind the edge Caddy (caddy_vps) and take it down after the demo:
+#   docker compose up -d --build
+#   docker compose down
+name: prs
+
+services:
+  backend:
+    build: ./backend
+    container_name: prs-backend
+    env_file: ./backend/.env
+    volumes:
+      # The prs-portal client key (openhim_single: scripts/onboard-client.sh prs-portal ...).
+      - ${PRS_PORTAL_KEY:-../openhim_single/keys/prs-portal.key.pem}:/run/secrets/prs-portal.key.pem:ro
+    ports:
+      - "127.0.0.1:${PRS_API_PORT:-4300}:4300"
+    networks: [prs-internal, openhim]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./ui
+      args:
+        # The URL the browser uses for the API, e.g. https://prs-api-<secret>.<DOMAIN> (set in .env)
+        VITE_API_BASE: "${VITE_API_BASE:-http://localhost:4300}"
+    container_name: prs-frontend
+    depends_on: [backend]
+    ports:
+      - "127.0.0.1:${PRS_PORT:-8092}:80"
+    networks: [prs-internal]
+    restart: unless-stopped
+
+networks:
+  prs-internal:
+    name: prs-internal          # fixed name: caddy_vps joins it
+    driver: bridge
+  openhim:
+    external: true
+    name: openhim_openhim

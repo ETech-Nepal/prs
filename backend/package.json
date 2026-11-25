@@ -1,0 +1,17 @@
+{
+  "name": "prs-backend",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PRS backend: signs the OpenHIM call (private_key_jwt + DPoP) and passes the FHIR through. No sign-in, no state.",
+  "scripts": { "start": "node src/server.js" },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.0",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.0.0",
+    "pino": "^9.0.0",
+    "pino-http": "^10.0.0",
+    "zod": "^3.23.0"
+  }
+}
