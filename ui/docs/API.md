@@ -15,6 +15,10 @@ browser ──► PRS backend (signs the call) ──► OpenHIM /prs/* ──�
 * **To show a new field**, read it in `src/fhir.js`, add it to the view-model, add a test, then use it in a component.
 * **No sign-in.** Anyone who can reach the backend can read patients. Private by hostname only.
 
+Both calls also send an `X-HIE-Trace` response header (URL-encoded JSON) for the "Request" view in the
+FHIR drawer: `{ "hie": { "method", "url", "headers" }, "fhir": ["GET <FHIR query>", ...] }`.
+Credentials in `headers` are placeholders, never real values. The header may be missing.
+
 Errors are not FHIR: `{ "error": "message" }` with status 400 (bad input), 404 (no such patient) or 502 (upstream failed).
 Responses use `Content-Type: application/fhir+json`.
 

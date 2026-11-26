@@ -19,6 +19,8 @@ const ICONS = {
   chevron: 'm6 9 6 6 6-6',
   pulse: 'M3 12h4l3-8 4 16 3-8h4',
   refresh: 'M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5',
+  report: 'M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3M7.5 15h9',
+  document: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6m-6 4h6',
 };
 
 function Icon({ name, size = 18, className }) {
@@ -58,6 +60,10 @@ export default function App() {
   const [openId, setOpenId] = useState(null);
   const [recent, setRecent] = useState([]); // patients opened this session
 
+  // The search that led to each record, so its "Request" view can show how the patient was found.
+  const lookups = useRef({});
+  const openFound = useCallback((id, trace) => { lookups.current[id] = trace; setOpenId(id); }, []);
+
   const remember = useCallback((p) => {
     setRecent((r) => [{ id: p.id, name: p.name || 'Unnamed patient' }, ...r.filter((x) => x.id !== p.id)].slice(0, 8));
   }, []);
@@ -78,8 +84,8 @@ export default function App() {
         <div className="prs-navfoot prs-label">Read-only demo<br />Live data via OpenHIM</div>
       </nav>
       {openId
-        ? <Record key={openId} id={openId} onLoaded={remember} onBack={() => setOpenId(null)} />
-        : <Search onOpen={setOpenId} />}
+        ? <Record key={openId} id={openId} lookup={lookups.current[openId]} onLoaded={remember} onBack={() => setOpenId(null)} />
+        : <Search onOpen={openFound} />}
     </div>
   );
 }
@@ -91,25 +97,42 @@ const KINDS = [
   { id: 'imis', label: 'IMIS number', keys: ['imis'], hint: 'IMIS number, as printed' },
 ];
 
+// Quick picks under the search bar: VITE_SAMPLE_SEARCHES="<IMIS number>=<label>;..." set at build time.
+// Real numbers belong in the deployment's .env only, never in this repo.
+const SAMPLES = (import.meta.env.VITE_SAMPLE_SEARCHES || '').split(';')
+  .map((s) => s.split('=').map((x) => x.trim()))
+  .filter(([imis]) => imis)
+  .map(([imis, label]) => ({ imis, label }));
+
 function Search({ onOpen }) {
   const [kind, setKind] = useState('any');
   const [value, setValue] = useState('');
   const [hits, setHits] = useState(null);
   const [fhir, setFhir] = useState(null);
+  const [trace, setTrace] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const segRef = useIndicator(kind);
 
-  async function submit(e) {
+  function submit(e) {
     e.preventDefault();
-    const v = value.trim();
-    setError(''); setBusy(true); setHits(null); setFhir(null);
+    run(kind, value.trim());
+  }
+
+  function pickSample(imis) {
+    setKind('imis'); setValue(imis);
+    run('imis', imis);
+  }
+
+  async function run(by, v) {
+    setError(''); setBusy(true); setHits(null); setFhir(null); setTrace(null);
     try {
-      const params = Object.fromEntries(KINDS.find((k) => k.id === kind).keys.map((k) => [k, v]));
+      const params = Object.fromEntries(KINDS.find((k) => k.id === by).keys.map((k) => [k, v]));
       const r = await prsApi.search(params);
-      if (r.patients.length === 1) return onOpen(r.patients[0].id);
+      if (r.patients.length === 1) return onOpen(r.patients[0].id, r.trace);
       setHits(r.patients);
       setFhir(r.fhir);
+      setTrace(r.trace);
     } catch (err) {
       setError(err.message);
     } finally { setBusy(false); }
@@ -137,13 +160,23 @@ function Search({ onOpen }) {
             </button>
           </div>
         </form>
+        {SAMPLES.length > 0 && (
+          <div className="prs-samples">
+            <h3>Sample searches (IMIS number)</h3>
+            {SAMPLES.map((s) => (
+              <button type="button" key={s.imis} disabled={busy} onClick={() => pickSample(s.imis)}>
+                <span className="mono">{s.imis}</span>{s.label}
+              </button>
+            ))}
+          </div>
+        )}
         {error && <div className="prs-alert" role="alert">{error}</div>}
         {hits && hits.length === 0 && <p className="prs-muted prs-fadein" role="status">No patient found for “{value.trim()}”. Check the number and the search type.</p>}
         {hits && hits.length > 1 && (
           <div className="prs-hits">
             <h3>{hits.length} patients match</h3>
             {hits.map((p, n) => (
-              <button key={p.id} className="prs-item prs-rise" style={{ '--i': Math.min(n, 8) }} onClick={() => onOpen(p.id)}>
+              <button key={p.id} className="prs-item prs-rise" style={{ '--i': Math.min(n, 8) }} onClick={() => onOpen(p.id, trace)}>
                 <div className="prs-item-main">
                   <div className="prs-item-title">{p.name || 'Unnamed patient'}</div>
                   <div className="prs-item-sub">{[p.gender, fmtDate(p.birthDate), p.identifiers.healthId && `Health ID ${p.identifiers.healthId}`].filter(Boolean).join(' · ')}</div>
@@ -153,7 +186,7 @@ function Search({ onOpen }) {
           </div>
         )}
       </div>
-      <FhirPanel resource={fhir} />
+      <FhirPanel resource={fhir} trace={trace} />
     </main>
   );
 }
@@ -162,8 +195,10 @@ function Search({ onOpen }) {
 
 const TABS = ['timeline', 'encounters', 'diagnoses', 'reports', 'documents'];
 const KIND_OF = { encounters: 'encounter', diagnoses: 'diagnosis', reports: 'report', documents: 'document' };
+// Timeline circle icon and label for each kind of item; the colour comes from [data-kind] in prs.css.
+const KIND_LOOK = { encounter: ['building', 'Encounter'], diagnosis: ['pulse', 'Diagnosis'], report: ['report', 'Report'], document: ['document', 'Document'] };
 
-function Record({ id, onLoaded, onBack }) {
+function Record({ id, lookup, onLoaded, onBack }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -249,14 +284,15 @@ function Record({ id, onLoaded, onBack }) {
             {data.truncated.length > 0 && <>Showing the latest 100 of: {data.truncated.join(', ')}.</>}
           </div>
         )}
-        <div className="prs-list" key={tab} id="prs-panel" role="tabpanel" aria-labelledby={`prs-tab-${tab}`} aria-busy={loading}>
+        <div className={`prs-list ${tab === 'timeline' ? 'prs-timeline' : ''}`} key={tab} id="prs-panel" role="tabpanel" aria-labelledby={`prs-tab-${tab}`} aria-busy={loading}>
           {list.length === 0 && <p className="prs-empty prs-fadein">Nothing recorded.</p>}
           {list.map((i, n) => (
             <button key={`${i.kind}:${i.id}`} className={`prs-item prs-rise ${current === i ? 'on' : ''}`} style={{ '--i': Math.min(n, 9) }}
-              aria-current={current === i ? 'true' : undefined} onClick={() => pick(i)}>
+              data-kind={i.kind} aria-current={current === i ? 'true' : undefined} onClick={() => pick(i)}>
+              {tab === 'timeline' && <span className="prs-dot"><Icon name={KIND_LOOK[i.kind][0]} size={15} /></span>}
               <div className="prs-item-main">
                 <div className="prs-item-title">{i.title}</div>
-                <div className="prs-item-sub">{fmtDate(i.date) || 'No date'}</div>
+                <div className="prs-item-sub">{fmtDate(i.date) || 'No date'}{tab === 'timeline' && <span className="prs-kind">{KIND_LOOK[i.kind][1]}</span>}</div>
                 <div className="prs-item-sub">{i.sub}</div>
               </div>
               {i.status && <Status value={i.status} />}
@@ -265,7 +301,7 @@ function Record({ id, onLoaded, onBack }) {
         </div>
       </section>
       <Detail key={current ? `${current.kind}:${current.id}` : 'none'} item={current} />
-      <FhirPanel resource={data.fhir} />
+      <FhirPanel resource={data.fhir} trace={{ ...data.trace, lookup }} />
     </>
   );
 }
@@ -380,7 +416,7 @@ function Detail({ item }) {
   }
   const x = item.raw;
   return (
-    <section id="prs-detail" className="prs-detail prs-swap">
+    <section id="prs-detail" className="prs-detail prs-swap" data-kind={item.kind}>
       <header className="prs-dhead">
         <div>
           <h2>{item.title}</h2>

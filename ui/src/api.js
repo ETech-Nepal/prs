@@ -13,18 +13,21 @@ async function request(path) {
     err.status = res.status;
     throw err;
   }
-  return data;
+  // What the browser asked, plus what the backend says it asked the HIE (X-HIE-Trace header).
+  let upstream = {};
+  try { upstream = JSON.parse(decodeURIComponent(res.headers.get('X-HIE-Trace'))) || {}; } catch { /* none sent */ }
+  return { data, trace: { browser: { method: 'GET', url: `${BASE}${path}` }, ...upstream } };
 }
 
 export const prsApi = {
-  // params: one or more of { hid, nid, imis } -> { patients: [...], fhir: the Bundle as received }
+  // params: one or more of { hid, nid, imis } -> { patients: [...], fhir: the Bundle as received, trace }
   search: async (params) => {
-    const fhir = await request(`/prs/search?${new URLSearchParams(params)}`);
-    return { patients: patientsFromSearch(fhir), fhir };
+    const { data: fhir, trace } = await request(`/prs/search?${new URLSearchParams(params)}`);
+    return { patients: patientsFromSearch(fhir), fhir, trace };
   },
-  // id from a search hit -> the record (view-model, see docs/API.md), plus the Bundle as received
+  // id from a search hit -> the record (view-model, see docs/API.md), plus the Bundle as received and the trace
   patient: async (id) => {
-    const fhir = await request(`/prs/patients/${encodeURIComponent(id)}`);
-    return { ...recordFromBundle(fhir), fhir };
+    const { data: fhir, trace } = await request(`/prs/patients/${encodeURIComponent(id)}`);
+    return { ...recordFromBundle(fhir), fhir, trace };
   },
 };

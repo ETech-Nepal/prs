@@ -23,6 +23,8 @@ services:
       args:
         # The URL the browser uses for the API, e.g. https://prs-api-<secret>.<DOMAIN> (set in .env)
         VITE_API_BASE: "${VITE_API_BASE:-http://localhost:4300}"
+        # Optional quick picks under the search bar: "<IMIS number>=<label>;..." (set in .env, never committed)
+        VITE_SAMPLE_SEARCHES: "${VITE_SAMPLE_SEARCHES:-}"
     container_name: prs-frontend
     depends_on: [backend]
     ports:

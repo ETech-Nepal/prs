@@ -16,6 +16,7 @@ app.use((req, res, next) => {
   res.header('Vary', 'Origin');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Expose-Headers', 'X-HIE-Trace');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -23,6 +24,10 @@ app.use((req, res, next) => {
 app.use(rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: true, legacyHeaders: false }));
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+function reply(res, { data, trace }) {
+  res.set('X-HIE-Trace', encodeURIComponent(JSON.stringify(trace))).type('application/fhir+json').json(data);
+}
 
 function forward(err, res, what) {
   const status = err.response?.status ?? 502;
@@ -39,11 +44,11 @@ app.get('/prs/search', async (req, res) => {
   const params = {};
   for (const k of ['hid', 'nid', 'imis']) if (typeof req.query[k] === 'string' && req.query[k].trim()) params[k] = req.query[k].trim();
   if (Object.keys(params).length === 0) return res.status(400).json({ error: 'enter a Health ID, National ID or IMIS number' });
-  try { res.type('application/fhir+json').json(await searchPatients(params)); } catch (err) { forward(err, res, 'search'); }
+  try { reply(res, await searchPatients(params)); } catch (err) { forward(err, res, 'search'); }
 });
 
 app.get('/prs/patients/:id', async (req, res) => {
-  try { res.type('application/fhir+json').json(await getPatientRecord(req.params.id)); } catch (err) { forward(err, res, 'record'); }
+  try { reply(res, await getPatientRecord(req.params.id)); } catch (err) { forward(err, res, 'record'); }
 });
 
 app.listen(config.PORT, () => logger.info(`PRS API listening on :${config.PORT}`));

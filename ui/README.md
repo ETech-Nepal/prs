@@ -32,6 +32,7 @@ Design the empty, sparse, loading and error states too: real records are often l
 | `src/App.jsx` | all screens: nav, search, patient panel, tabs and list, detail |
 | `src/prs.css` | all styles, scoped under `.prs` |
 | `src/Results.jsx` | lab result rows |
+| `src/FhirPanel.jsx`, `src/highlight.js` | the FHIR drawer: raw response with identifiers highlighted, and the requests behind it |
 | `src/format.js` | date formatting |
 | `src/fhir.js` | FHIR → view-model (the only place that knows FHIR); `npm test` covers it |
 | `src/api.js` | the two backend calls; they return the view-model |

@@ -15,6 +15,11 @@ http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Content-Type', 'application/fhir+json');
+  res.setHeader('Access-Control-Expose-Headers', 'X-HIE-Trace');
+  res.setHeader('X-HIE-Trace', encodeURIComponent(JSON.stringify({
+    hie: { method: 'GET', url: `https://openhim.example${req.url}`, headers: { Authorization: 'DPoP <access token, hidden>', DPoP: '<signed proof, hidden>' } },
+    fhir: ['GET http://fhir:8080/fhir/Patient (sample, from the mock)'],
+  })));
   const send = (code, body) => { res.statusCode = code; res.end(JSON.stringify(body)); };
   if (url.pathname === '/prs/search') {
     if (!['hid', 'nid', 'imis'].some((k) => url.searchParams.get(k))) return send(400, { error: 'one of hid, nid, imis is required' });

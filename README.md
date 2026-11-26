@@ -23,6 +23,8 @@ Bundles is the `/prs` routes of `openhie/services/patient-portal-mediator`.
 1. `openhim_single`: onboard the client (`./scripts/onboard-client.sh prs-portal "PRS staff portal BFF" prs-portal`) and deploy the mediator image that has `/prs`.
 2. `cp backend/.env.example backend/.env` and fill in the hostnames and URLs; set `VITE_API_BASE` in `.env`.
 3. `docker compose up -d --build`
+   Optional quick picks under the search bar: `VITE_SAMPLE_SEARCHES="<IMIS number>=<label>;..."` in `.env`.
+   They are baked into the page, so use real numbers only where the hostname is access-restricted.
 4. `caddy_vps/.env`: set `PRS_HOST` and `PRS_API_HOST` to unguessable names, then `docker compose up -d` there.
 5. **After the demo:** `docker compose down` here, remove the two hostnames from `caddy_vps/.env`, `docker compose up -d` there.
 

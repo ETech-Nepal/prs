@@ -38,13 +38,26 @@ client.interceptors.response.use((res) => {
 });
 
 
-// `params` holds one of { hid, nid, imis }.
-export async function searchPatients(params) {
-  const { data } = await client.get('/prs/search', { params, headers: { 'X-PRS-User': 'demo' } });
-  return data;
+// The request as sent to the HIE, for the UI's "Request" view. Credentials are never included.
+function traceOf(res, path, params) {
+  const query = new URLSearchParams(params).toString();
+  let fhir = [];
+  try { fhir = JSON.parse(decodeURIComponent(res.headers['x-fhir-queries'])); } catch { /* older mediator: none sent */ }
+  return {
+    hie: {
+      method: 'GET',
+      url: `${config.OPENHIM_PUBLIC_BASE_URL.replace(/\/$/, '')}${path}${query ? `?${query}` : ''}`,
+      headers: { Authorization: 'DPoP <access token, hidden>', DPoP: '<signed proof, hidden>', 'X-PRS-User': 'demo' },
+    },
+    fhir,
+  };
 }
 
-export async function getPatientRecord(id) {
-  const { data } = await client.get(`/prs/patients/${encodeURIComponent(id)}`, { headers: { 'X-PRS-User': 'demo' } });
-  return data;
+async function get(path, params) {
+  const res = await client.get(path, { params, headers: { 'X-PRS-User': 'demo' } });
+  return { data: res.data, trace: traceOf(res, path, params) };
 }
+
+// `params` holds one of { hid, nid, imis }.
+export const searchPatients = (params) => get('/prs/search', params);
+export const getPatientRecord = (id) => get(`/prs/patients/${encodeURIComponent(id)}`);
