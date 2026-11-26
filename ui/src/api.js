@@ -17,8 +17,14 @@ async function request(path) {
 }
 
 export const prsApi = {
-  // params: one or more of { hid, nid, imis } -> { patients: [...] }
-  search: async (params) => ({ patients: patientsFromSearch(await request(`/prs/search?${new URLSearchParams(params)}`)) }),
-  // id from a search hit -> the record (view-model, see docs/API.md)
-  patient: async (id) => recordFromBundle(await request(`/prs/patients/${encodeURIComponent(id)}`)),
+  // params: one or more of { hid, nid, imis } -> { patients: [...], fhir: the Bundle as received }
+  search: async (params) => {
+    const fhir = await request(`/prs/search?${new URLSearchParams(params)}`);
+    return { patients: patientsFromSearch(fhir), fhir };
+  },
+  // id from a search hit -> the record (view-model, see docs/API.md), plus the Bundle as received
+  patient: async (id) => {
+    const fhir = await request(`/prs/patients/${encodeURIComponent(id)}`);
+    return { ...recordFromBundle(fhir), fhir };
+  },
 };

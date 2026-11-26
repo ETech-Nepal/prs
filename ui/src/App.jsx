@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { prsApi } from './api.js';
 import { fmtDate, fmtDateTime } from './format.js';
 import { ResultTable } from './Results.jsx';
+import { FhirPanel } from './FhirPanel.jsx';
 import './prs.css';
 
 // Patient Record System: search by Health ID / National ID / IMIS number, open a
@@ -94,6 +95,7 @@ function Search({ onOpen }) {
   const [kind, setKind] = useState('any');
   const [value, setValue] = useState('');
   const [hits, setHits] = useState(null);
+  const [fhir, setFhir] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const segRef = useIndicator(kind);
@@ -101,12 +103,13 @@ function Search({ onOpen }) {
   async function submit(e) {
     e.preventDefault();
     const v = value.trim();
-    setError(''); setBusy(true); setHits(null);
+    setError(''); setBusy(true); setHits(null); setFhir(null);
     try {
       const params = Object.fromEntries(KINDS.find((k) => k.id === kind).keys.map((k) => [k, v]));
       const r = await prsApi.search(params);
       if (r.patients.length === 1) return onOpen(r.patients[0].id);
       setHits(r.patients);
+      setFhir(r.fhir);
     } catch (err) {
       setError(err.message);
     } finally { setBusy(false); }
@@ -150,6 +153,7 @@ function Search({ onOpen }) {
           </div>
         )}
       </div>
+      <FhirPanel resource={fhir} />
     </main>
   );
 }
@@ -261,6 +265,7 @@ function Record({ id, onLoaded, onBack }) {
         </div>
       </section>
       <Detail key={current ? `${current.kind}:${current.id}` : 'none'} item={current} />
+      <FhirPanel resource={data.fhir} />
     </>
   );
 }
